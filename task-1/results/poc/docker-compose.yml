@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  airflow-poc:
+    image: apache/airflow:2.9.0-python3.11
+    container_name: airflow_batch_poc
+    environment:
+      # Local execution configs
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      
+      # Admin credentials for POC
+      - _AIRFLOW_DB_UPGRADE=True
+      - _AIRFLOW_WWW_USER_CREATE=True
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+      - _AIRFLOW_WWW_USER_EMAIL=admin@example.com
+      
+      # SMTP setup overriden for test alerts
+      - AIRFLOW__SMTP__SMTP_HOST=smtp.gmail.com
+      - AIRFLOW__SMTP__SMTP_MAIL_FROM=airflow-noreply@example.com
+      - AIRFLOW__SMTP__SMTP_PORT=587 
+
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+
+    ports:
+      - "8080:8080"
+      
+    # Init DB and start scheduler+webserver for local testing
+    command: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create --username admin --password admin --firstname Admin --lastname Admin --role Admin --email admin@example.com || true &&
+      (airflow scheduler & airflow webserver)"
