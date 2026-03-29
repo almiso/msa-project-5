@@ -1,0 +1,73 @@
+# Мок базы данных для локального тестирования
+# Создаст таблицу и добавит начальные данные
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-script
+  namespace: default
+data:
+  init.sql: |
+    CREATE TABLE shipments (
+        id SERIAL PRIMARY KEY,
+        tracking_number VARCHAR(50) NOT NULL,
+        origin VARCHAR(100),
+        destination VARCHAR(100),
+        status VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    -- Добавляем немного фейковых данных для выгрузки
+    INSERT INTO shipments (tracking_number, origin, destination, status) VALUES 
+    ('TRK-000001', 'Moscow', 'Saint Petersburg', 'DELIVERED'),
+    ('TRK-000002', 'Novosibirsk', 'Kazan', 'IN_TRANSIT'),
+    ('TRK-000003', 'Yekaterinburg', 'Chelyabinsk', 'PENDING'),
+    ('TRK-000004', 'Vladivostok', 'Khabarovsk', 'DELIVERED'),
+    ('TRK-000005', 'Sochi', 'Rostov-on-Don', 'IN_TRANSIT');
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_USER
+          value: "admin"
+        - name: POSTGRES_PASSWORD
+          value: "admin_pwd"
+        - name: POSTGRES_DB
+          value: "logistics"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: init-script
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: init-script
+        configMap:
+          name: postgres-init-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: default
+spec:
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432

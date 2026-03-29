@@ -1,0 +1,41 @@
+# Манифест для ежедневной выгрузки (CronJob)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-shipments-export
+  namespace: default
+spec:
+  # Запуск каждый день в 20:00
+  schedule: "0 20 * * *"
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: data-exporter
+            # Используем локальный образ из миникуба
+            image: shipments-exporter:latest
+            imagePullPolicy: IfNotPresent
+            # Конфиг для подключения к базе
+            env:
+            - name: DB_HOST
+              value: "postgres-service"
+            - name: DB_USER
+              value: "admin"
+            - name: DB_PASSWORD
+              value: "admin_pwd"
+            - name: DB_NAME
+              value: "logistics"
+            # Выделяем немного ресурсов, скрипт почти ничего не ест
+            resources:
+              requests:
+                memory: "32Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "200m"
+          # Перезапускаем под при ошибке выгрузки
+          restartPolicy: OnFailure
