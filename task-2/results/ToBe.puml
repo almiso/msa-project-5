@@ -1,0 +1,19 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title C4 Контекст системы генерации прайс-листов (To-Be)
+
+Person(b2b_client, "B2B Клиент / Менеджер", "Ожидает получения актуального прайс-листа с индивидуальными ценами.")
+
+System_Ext(delivery_system, "Система доставки (S3 / Email)", "Облачное хранилище или SMTP-сервер, куда складывается готовый CSV-файл для скачивания.")
+
+System_Boundary(k8s_cluster, "Microservice Infrastructure (K8s Cluster)") {
+  System(cronjob, "Модуль пакетной обработки (K8s CronJob)", "Изолированный под, который просыпается ровно в 06:00, выбирает данные, формирует CSV м отдаёт его.")
+  SystemDb(postgres, "База данных (PostgreSQL)", "Хранит данные (10-20k строк): товары, клиенты, индивидуальные цены и категории.")
+}
+
+Rel(cronjob, postgres, "JOIN таблиц и формирование выборки", "Raw SQL (psql / JDBC)")
+Rel(cronjob, delivery_system, "Загружает CSV файл", "REST API / S3 API")
+Rel(delivery_system, b2b_client, "Доставляет / предоставляет доступ к прайс-листу", "HTTPS")
+
+@enduml
