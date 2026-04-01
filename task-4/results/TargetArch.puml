@@ -1,0 +1,24 @@
+@startuml C4-TargetArch-ToBe
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title C4 Контекст — TradeWare To-Be (Spring Batch ETL)
+
+Person(employee, "Сотрудник склада", "Ежедневно загружает CSV (до 400к строк)")
+
+System_Boundary(platform, "TradeWare Platform (GCP)") {
+    System(frontend, "Frontend ERP", "Angular интерфейс")
+    System(monolith, "Backend API Монолит", "Java 11 / WildFly.\nОбрабатывает пользовательские запросы,\nвалидацию и роутинг файлов.")
+    System(etl, "Spring Batch ETL", "Изолированный микросервис.\nАсинхронно обрабатывает CSV батчами,\nне блокируя UI и монолит.")
+    SystemDb(gcs, "File Storage (GCS)", "Промежуточное хранилище\nзагруженных CSV-отчетов")
+    SystemDb(db_nomen, "БД TradeWare (PostgreSQL)", "Схема products: номенклатура и остатки.\nСхема loyality_data: справочник лояльности.")
+}
+
+Rel(employee, frontend, "Загружает складской отчёт")
+Rel(frontend, monolith, "Проксирует файл", "HTTP REST")
+Rel(monolith, gcs, "Сохраняет CSV", "GCS API")
+Rel(monolith, etl, "Запускает асинхронный Batch Job", "Event / API")
+Rel(etl, gcs, "Стримит файл через FlatFileItemReader", "Stream")
+Rel(etl, db_nomen, "Lookup лояльности + пакетный INSERT остатков", "JDBC")
+
+@enduml
