@@ -1,0 +1,53 @@
+@startuml C4-UpdatedArch-ToBe-Monitoring
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C4 Контейнеры — TradeWare To-Be с мониторингом, логированием и оповещением
+
+Person(employee, "Сотрудник склада", "Загружает CSV-отчёты через интранет.")
+Person(devops, "DevOps / аналитик", "Наблюдает дашборды, получает алерты.")
+
+System_Boundary(platform, "TradeWare Platform (GCP / Docker Compose)") {
+
+    System_Boundary(app_layer, "Слой приложения") {
+        Container(frontend, "Frontend ERP", "Angular", "Интерфейс для сотрудников склада.")
+        Container(monolith, "Backend API Монолит", "Java 11 / WildFly", "CRUD, валидация файлов, роутинг.")
+        Container(etl, "Spring Batch ETL", "Java 17 / Spring Boot", "Асинхронная пакетная обработка CSV.\nЭкспортирует метрики через /actuator/prometheus.\nПишет структурированные JSON-логи в stdout.")
+    }
+
+    System_Boundary(data_layer, "Слой данных") {
+        ContainerDb(gcs, "File Storage (GCS)", "Google Cloud Storage", "Хранит загруженные CSV.")
+        ContainerDb(postgres, "PostgreSQL", "products, loyality_data", "Целевая база данных ETL.")
+    }
+
+    System_Boundary(observability, "Слой наблюдаемости (Observability)") {
+        Container(prometheus, "Prometheus", "prom/prometheus", "Собирает метрики каждые 5 секунд.\nХранит time-series данные.")
+        Container(grafana, "Grafana", "grafana/grafana", "Дашборды: CPU, JVM Heap, Batch Items.\nАлерт: CPU > 80% → уведомление.")
+        Container(filebeat, "Filebeat", "elastic/filebeat", "Перехватывает Docker stdout-логи.\nДекодирует JSON, пересылает в Logstash.")
+        Container(logstash, "Logstash", "elastic/logstash", "Принимает Beats, нормализует.\nИндексирует в Elasticsearch.")
+        ContainerDb(elasticsearch, "Elasticsearch", "elastic/elasticsearch", "Хранит и индексирует структурированные логи.")
+        Container(kibana, "Kibana", "elastic/kibana", "Визуализация и фильтрация логов.")
+    }
+}
+
+' App Flow
+Rel(employee, frontend, "Загружает отчёт")
+Rel(frontend, monolith, "HTTP REST")
+Rel(monolith, gcs, "Сохраняет CSV")
+Rel(monolith, etl, "Триггерит Batch Job")
+Rel(etl, gcs, "Читает CSV (FlatFileItemReader)")
+Rel(etl, postgres, "Chunk-запись результатов (JDBC)")
+
+' Metrics Flow
+Rel(prometheus, etl, "scrape /actuator/prometheus каждые 5s", "HTTP pull")
+Rel(grafana, prometheus, "PromQL запросы")
+Rel(grafana, devops, "Дашборды + алерты")
+
+' Logs Flow
+Rel(filebeat, etl, "Читает Docker stdout (JSON-логи)")
+Rel(filebeat, logstash, "Beats protocol")
+Rel(logstash, elasticsearch, "Index REST API")
+Rel(kibana, elasticsearch, "Query API")
+Rel(devops, kibana, "Просматривает логи")
+
+@enduml

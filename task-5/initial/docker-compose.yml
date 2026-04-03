@@ -93,10 +93,12 @@ services:
   app:
     depends_on:
       - postgresdb
-      - filebeat1
+      - filebeat
       - grafana
     image: batch-processing
     build:
       context: .
       dockerfile: ./Dockerfile
-    restart: no
+    ports:
+      - '8080:8080'
+    restart: always

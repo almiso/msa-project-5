@@ -5,11 +5,8 @@ import org.slf4j.LoggerFactory;
 
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-
-import java.util.concurrent.atomic.AtomicReference;
 
 @Component
 public class ProductItemProcessor implements ItemProcessor<Product, Product> {
@@ -19,11 +16,30 @@ public class ProductItemProcessor implements ItemProcessor<Product, Product> {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
-    @Override
+	@Override
 	public Product process(final Product product) {
-      //todo
+		String loyaltyStatus;
+		try {
+			loyaltyStatus = jdbcTemplate.queryForObject(
+				"SELECT loyalityData FROM loyality_data WHERE productSku = ?",
+				String.class,
+				product.productSku()
+			);
+		} catch (org.springframework.dao.EmptyResultDataAccessException e) {
+			// Товар не найден в справочнике лояльности — оставляем исходное значение
+			loyaltyStatus = product.productData();
+		}
 
-		return //todo
+		Product enrichedProduct = new Product(
+			product.productId(),
+			product.productSku(),
+			product.productName(),
+			product.productAmount(),
+			loyaltyStatus
+		);
+
+		log.info("Transforming Product SKU ({}) -> Loyalty: {}", product.productSku(), loyaltyStatus);
+		return enrichedProduct;
 	}
 
 }
